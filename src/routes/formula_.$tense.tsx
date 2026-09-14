@@ -26,9 +26,7 @@ export const Route = createFileRoute("/formula_/$tense")({
   component: TenseDetailPage,
 });
 
-// ─── Floema-style scroll reveal hook ─────────────────────────────────────────
-// Mirrors Floema's Animation base class: IntersectionObserver animates each
-// element in on enter (opacity 0→1, y 40→0) and resets on exit.
+// ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
 
 function useScrollReveal<T extends HTMLElement>(
   options: { threshold?: number; rootMargin?: string } = {}
@@ -40,8 +38,8 @@ function useScrollReveal<T extends HTMLElement>(
     if (!el) return;
 
     el.style.opacity = "0";
-    el.style.transform = "translateY(40px)";
-    el.style.transition = "opacity 0.75s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.75s cubic-bezier(0.25, 0.8, 0.25, 1)";
+    el.style.transform = "translateY(30px)";
+    el.style.transition = "opacity 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1)";
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -51,11 +49,11 @@ function useScrollReveal<T extends HTMLElement>(
             el.style.transform = "translateY(0)";
           } else {
             el.style.opacity = "0";
-            el.style.transform = "translateY(40px)";
+            el.style.transform = "translateY(30px)";
           }
         });
       },
-      { threshold: options.threshold ?? 0.15, rootMargin: options.rootMargin ?? "0px" }
+      { threshold: options.threshold ?? 0.1, rootMargin: options.rootMargin ?? "0px" }
     );
 
     observer.observe(el);
@@ -109,137 +107,299 @@ function parseFormulaToGroups(formulaStr: string): FormulaGroup[] {
   return groups;
 }
 
-// ─── Category colour palette ──────────────────────────────────────────────────
+// ─── Category Card Theme Colors (matching /tenses page) ─────────────────────
 
-const CATEGORY_PALETTE: Record<TenseCategory, { bg: string; accent: string; text: string; border: string }> = {
-  present: { bg: "#e6fab9", accent: "#29725f", text: "#1e5c3f", border: "rgba(41,114,95,0.15)" },
-  past: { bg: "#f0befa", accent: "#a0325a", text: "#6b1a3a", border: "rgba(160,50,90,0.15)" },
-  future: { bg: "#82a0ff", accent: "#4b69f0", text: "#ffffff", border: "rgba(75,105,240,0.2)" },
-  "past-future": { bg: "#f5693c", accent: "#c94a1a", text: "#ffffff", border: "rgba(245,105,60,0.2)" },
+const CATEGORY_THEME: Record<TenseCategory, { bg: string; text: string; subBg: string; border: string; isDarkTheme: boolean }> = {
+  present:     { bg: "#29725f", text: "#ffffff", subBg: "rgba(255, 255, 255, 0.12)", border: "rgba(255, 255, 255, 0.18)", isDarkTheme: true },
+  past:        { bg: "#4b69f0", text: "#ffffff", subBg: "rgba(255, 255, 255, 0.12)", border: "rgba(255, 255, 255, 0.18)", isDarkTheme: true },
+  future:      { bg: "#f5693c", text: "#111111", subBg: "rgba(0, 0, 0, 0.06)",        border: "rgba(0, 0, 0, 0.12)",        isDarkTheme: false },
+  "past-future": { bg: "#a0325a", text: "#ffffff", subBg: "rgba(255, 255, 255, 0.12)", border: "rgba(255, 255, 255, 0.18)", isDarkTheme: true },
 };
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Main Page Component ──────────────────────────────────────────────────────
 
 function TenseDetailPage() {
   const { tense } = Route.useParams();
   const t = TENSES_BY_SLUG[tense];
   const questions = useMemo(() => QUIZZES[tense] ?? [], [tense]);
 
+  const currentIndex = TENSES.findIndex((item) => item.slug === tense);
+  const prevTense = currentIndex > 0 ? TENSES[currentIndex - 1] : TENSES[TENSES.length - 1];
+  const nextTense = currentIndex < TENSES.length - 1 ? TENSES[currentIndex + 1] : TENSES[0];
+
   return (
     <div style={{ background: "#F5F1EB", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "120px 24px 96px" }}>
-        <Hero tense={t} />
-        <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem", marginTop: "2rem" }}>
-          <OverviewSection tense={t} />
-          <FormulaSection tense={t} />
-          <ExamplesSection tense={t} />
-          <TimeExpressionsSection tense={t} />
-          <UsageSection tense={t} />
-          <ExerciseSection tense={t} questions={questions} />
-          <QuizCtaSection tense={t} />
-        </div>
+      <div className="formula-page-wrapper">
+        {/* Left Side Menu (Text Only) */}
+        <TenseLeftMenu currentSlug={tense} prevTense={prevTense} />
+
+        {/* Center Single Unified Colored Box */}
+        <SingleTenseBox tense={t} questions={questions} />
+
+        {/* Right Side Menu (Text Only) */}
+        <TenseRightMenu currentSlug={tense} nextTense={nextTense} />
       </div>
     </div>
   );
 }
 
-// ─── Divider ──────────────────────────────────────────────────────────────────
+// ─── Left Side Text Menu ──────────────────────────────────────────────────────
 
-function Divider() {
+function TenseLeftMenu({ currentSlug, prevTense }: { currentSlug: string; prevTense: Tense }) {
+  const presentTenses = TENSES.filter((t) => t.category === "present");
+  const pastTenses = TENSES.filter((t) => t.category === "past");
+
   return (
-    <hr style={{ border: "none", borderTop: "1px solid rgba(0,0,0,0.08)", margin: "0" }} />
+    <aside className="tense-side-menu tense-side-menu-left">
+      {/* Previous Tense text button */}
+      <Link
+        to="/formula/$tense"
+        params={{ tense: prevTense.slug }}
+        className="tense-side-nav-link"
+      >
+        <span style={{ fontSize: "0.625rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "#8c827a" }}>
+          ← Sebelumnya
+        </span>
+        <span style={{ fontFamily: "'Epilogue', sans-serif", fontSize: "0.9375rem", fontWeight: 800, color: "#111111" }}>
+          {prevTense.name}
+        </span>
+      </Link>
+
+      {/* Present Tenses Group */}
+      <div className="tense-side-group">
+        <span className="tense-side-group-title">Present Tenses</span>
+        {presentTenses.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <Link
+              key={item.slug}
+              to="/formula/$tense"
+              params={{ tense: item.slug }}
+              className={`tense-text-item ${isActive ? "active" : ""}`}
+            >
+              {isActive && <span className="tense-active-dot" />}
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Past Tenses Group */}
+      <div className="tense-side-group">
+        <span className="tense-side-group-title">Past Tenses</span>
+        {pastTenses.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <Link
+              key={item.slug}
+              to="/formula/$tense"
+              params={{ tense: item.slug }}
+              className={`tense-text-item ${isActive ? "active" : ""}`}
+            >
+              {isActive && <span className="tense-active-dot" />}
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
 
-// ─── Section Label ────────────────────────────────────────────────────────────
+// ─── Right Side Text Menu ─────────────────────────────────────────────────────
+
+function TenseRightMenu({ currentSlug, nextTense }: { currentSlug: string; nextTense: Tense }) {
+  const futureTenses = TENSES.filter((t) => t.category === "future");
+  const pastFutureTenses = TENSES.filter((t) => t.category === "past-future");
+
+  return (
+    <aside className="tense-side-menu tense-side-menu-right">
+      {/* Next Tense text button */}
+      <Link
+        to="/formula/$tense"
+        params={{ tense: nextTense.slug }}
+        className="tense-side-nav-link"
+        style={{ textAlign: "right" }}
+      >
+        <span style={{ fontSize: "0.625rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "#8c827a" }}>
+          Berikutnya →
+        </span>
+        <span style={{ fontFamily: "'Epilogue', sans-serif", fontSize: "0.9375rem", fontWeight: 800, color: "#111111" }}>
+          {nextTense.name}
+        </span>
+      </Link>
+
+      {/* Future Tenses Group */}
+      <div className="tense-side-group">
+        <span className="tense-side-group-title">Future Tenses</span>
+        {futureTenses.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <Link
+              key={item.slug}
+              to="/formula/$tense"
+              params={{ tense: item.slug }}
+              className={`tense-text-item ${isActive ? "active" : ""}`}
+            >
+              {isActive && <span className="tense-active-dot" />}
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Past Future Tenses Group */}
+      <div className="tense-side-group">
+        <span className="tense-side-group-title">Past Future Tenses</span>
+        {pastFutureTenses.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <Link
+              key={item.slug}
+              to="/formula/$tense"
+              params={{ tense: item.slug }}
+              className={`tense-text-item ${isActive ? "active" : ""}`}
+            >
+              {isActive && <span className="tense-active-dot" />}
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+// ─── Single Unified Colored Box Component ─────────────────────────────────────
+
+interface SingleTenseBoxProps {
+  tense: Tense;
+  questions: any[];
+}
+
+function SingleTenseBox({ tense, questions }: SingleTenseBoxProps) {
+  const theme = CATEGORY_THEME[tense.category];
+  const isDark = theme.isDarkTheme;
+
+  const sectionLabelColor = isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.6)";
+
+  return (
+    <main
+      className="single-tense-box"
+      style={{
+        backgroundColor: theme.bg,
+        color: theme.text,
+      }}
+    >
+      {/* ── 1. Hero / Header inside the box ── */}
+      <header style={{ textAlign: "center", paddingTop: "1rem" }}>
+        <span
+          style={{
+            display: "inline-block",
+            background: isDark ? "rgba(255, 255, 255, 0.18)" : "rgba(0, 0, 0, 0.08)",
+            color: theme.text,
+            padding: "6px 16px",
+            borderRadius: "999px",
+            fontFamily: "'Epilogue', sans-serif",
+            fontWeight: 900,
+            fontSize: "0.6875rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            marginBottom: "1.25rem",
+          }}
+        >
+          {tense.category.replace("-", " ")}
+        </span>
+
+        <h1
+          style={{
+            fontFamily: "'Epilogue', sans-serif",
+            fontWeight: 900,
+            fontSize: "clamp(2.5rem, 6vw, 4.5rem)",
+            letterSpacing: "-0.03em",
+            lineHeight: 1.05,
+            color: theme.text,
+            margin: "0 0 0.875rem",
+          }}
+        >
+          {tense.name}
+        </h1>
+
+        <p
+          style={{
+            fontFamily: "'Lora', serif",
+            fontStyle: "italic",
+            fontSize: "clamp(1.125rem, 2.5vw, 1.375rem)",
+            color: theme.text,
+            opacity: 0.8,
+            margin: "0",
+          }}
+        >
+          {tense.indonesian}
+        </p>
+      </header>
+
+      {/* ── 2. Overview Section ── */}
+      <section style={{ textAlign: "center" }}>
+        <SectionLabel style={{ color: sectionLabelColor }}>Overview</SectionLabel>
+        <p
+          style={{
+            fontFamily: "'Lora', serif",
+            fontStyle: "italic",
+            fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)",
+            lineHeight: 1.7,
+            color: theme.text,
+            maxWidth: 680,
+            margin: "0 auto",
+          }}
+        >
+          "{tense.overview}"
+        </p>
+      </section>
+
+      {/* ── 3. Formula Section ── */}
+      <FormulaInnerSection tense={tense} theme={theme} sectionLabelColor={sectionLabelColor} />
+
+      {/* ── 4. Examples Section ── */}
+      <ExamplesInnerSection tense={tense} theme={theme} sectionLabelColor={sectionLabelColor} />
+
+      {/* ── 5. Time Expressions Section ── */}
+      <TimeExpressionsInnerSection tense={tense} theme={theme} sectionLabelColor={sectionLabelColor} />
+
+      {/* ── 6. Usage Section ── */}
+      <UsageInnerSection tense={tense} theme={theme} sectionLabelColor={sectionLabelColor} />
+
+      {/* ── 7. Practice Exercise Section ── */}
+      <ExerciseInnerSection tense={tense} questions={questions} sectionLabelColor={sectionLabelColor} />
+
+      {/* ── 8. Quiz CTA Section ── */}
+      <QuizCtaInnerSection tense={tense} sectionLabelColor={sectionLabelColor} />
+    </main>
+  );
+}
+
+// ─── Section Label Helper ─────────────────────────────────────────────────────
 
 function SectionLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <span style={{
-      display: "block",
-      fontSize: "0.6875rem",
-      fontFamily: "'Epilogue', sans-serif",
-      fontWeight: 900,
-      letterSpacing: "0.15em",
-      textTransform: "uppercase",
-      color: "#f5693c",
-      marginBottom: "1.25rem",
-      ...style
-    }}>
-      {children}
-    </span>
-  );
-}
-
-// ─── Hero ─────────────────────────────────────────────────────────────────────
-
-interface TenseProp { tense: Tense }
-
-function Hero({ tense }: TenseProp) {
-  return (
-    <section style={{ paddingBottom: "64px", textAlign: "center" }}>
-      <span style={{
-        display: "inline-block",
+    <span
+      style={{
+        display: "block",
         fontSize: "0.6875rem",
         fontFamily: "'Epilogue', sans-serif",
         fontWeight: 900,
         letterSpacing: "0.15em",
         textTransform: "uppercase",
-        color: "#f5693c",
-        marginBottom: "1rem",
-      }}>
-        {tense.category.replace("-", " ")}
-      </span>
-
-      <h1 style={{
-        fontFamily: "'Epilogue', sans-serif",
-        fontWeight: 900,
-        fontSize: "clamp(2.75rem, 8vw, 5rem)",
-        letterSpacing: "-0.03em",
-        lineHeight: 1.05,
-        color: "#111111",
-        margin: "0 0 1rem",
-      }}>
-        {tense.name}
-      </h1>
-
-      <p style={{
-        fontFamily: "'Lora', serif",
-        fontStyle: "italic",
-        fontSize: "clamp(1rem, 2.5vw, 1.375rem)",
-        color: "#6b6560",
-        margin: "0",
-      }}>
-        {tense.indonesian}
-      </p>
-    </section>
+        marginBottom: "1.25rem",
+        ...style,
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
-// ─── Overview ─────────────────────────────────────────────────────────────────
-
-function OverviewSection({ tense }: TenseProp) {
-  return (
-    <section className="formula-card formula-card-green" style={{ textAlign: "center" }}>
-      <SectionLabel style={{ color: "rgba(255, 255, 255, 0.75)" }}>Overview</SectionLabel>
-      <p style={{
-        fontFamily: "'Lora', serif",
-        fontStyle: "italic",
-        fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)",
-        lineHeight: 1.7,
-        color: "var(--color-white)",
-        maxWidth: 680,
-        margin: "0 auto",
-      }}>
-        "{tense.overview}"
-      </p>
-    </section>
-  );
-}
-
-
-
-// ─── Formula ──────────────────────────────────────────────────────────────────
+// ─── Formula Inner Component ──────────────────────────────────────────────────
 
 const FORMULA_TYPES = [
   { key: "positive", label: "Positive" },
@@ -248,83 +408,83 @@ const FORMULA_TYPES = [
   { key: "negativeInterrogative", label: "Negative Interrogative" },
 ] as const;
 
-function FormulaSection({ tense }: TenseProp) {
+function FormulaInnerSection({ tense, theme, sectionLabelColor }: { tense: Tense; theme: typeof CATEGORY_THEME["present"]; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} className="formula-card formula-card-darkblue">
-      <SectionLabel style={{ color: "rgba(255, 255, 255, 0.75)" }}>Sentence Formula</SectionLabel>
+    <section ref={ref}>
+      <SectionLabel style={{ color: sectionLabelColor }}>Sentence Formula</SectionLabel>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {FORMULA_TYPES.map(({ key, label }) => {
           const formulaStr = tense.formula[key];
           const groups = parseFormulaToGroups(formulaStr);
 
-          let cardColorClass = "";
-          let labelColor = "rgba(0, 0, 0, 0.4)";
-          let formulaColor = "#111111";
-          let groupBg = "rgba(255, 255, 255, 0.85)";
-
-          if (key === "positive") {
-            cardColorClass = "formula-card-lightblue";
-          } else if (key === "negative") {
-            cardColorClass = "formula-card-orange";
-          } else if (key === "interrogative") {
-            cardColorClass = "formula-card-maroon";
-            labelColor = "rgba(255, 255, 255, 0.7)";
-            formulaColor = "#ffffff";
-            groupBg = "rgba(255, 255, 255, 0.08)";
-          } else {
-            cardColorClass = "formula-card-pink";
-          }
-
           return (
-            <div key={key} className={`formula-card ${cardColorClass}`} style={{ padding: "1.5rem", marginBottom: 0 }}>
-              <p style={{
-                fontFamily: "'Epilogue', sans-serif",
-                fontWeight: 800,
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: labelColor,
-                marginBottom: "0.75rem",
-              }}>
+            <div
+              key={key}
+              style={{
+                background: theme.subBg,
+                border: `1px solid ${theme.border}`,
+                borderRadius: "20px",
+                padding: "1.5rem",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "'Epilogue', sans-serif",
+                  fontWeight: 800,
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: theme.isDarkTheme ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.55)",
+                  marginBottom: "0.75rem",
+                }}
+              >
                 {label}
               </p>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: groups.length === 1 ? "1fr" : "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "0.75rem",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: groups.length === 1 ? "1fr" : "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 {groups.map((group, i) => (
-                  <div key={i} style={{
-                    background: groupBg,
-                    borderRadius: "16px",
-                    padding: "1.25rem 1.5rem",
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.02)",
-                    border: "1px solid rgba(0,0,0,0.04)",
-                  }}>
-                    <span style={{
-                      display: "block",
-                      fontFamily: "'Epilogue', sans-serif",
-                      fontWeight: 700,
-                      fontSize: "0.6875rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      color: labelColor,
-                      marginBottom: "0.5rem",
-                    }}>
+                  <div
+                    key={i}
+                    style={{
+                      background: theme.isDarkTheme ? "rgba(255, 255, 255, 0.1)" : "rgba(255, 255, 255, 0.6)",
+                      borderRadius: "14px",
+                      padding: "1.125rem 1.25rem",
+                      border: `1px solid ${theme.border}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontFamily: "'Epilogue', sans-serif",
+                        fontWeight: 700,
+                        fontSize: "0.6875rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                        color: theme.isDarkTheme ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.55)",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
                       {group.pronouns}
                     </span>
-                    <span style={{
-                      fontFamily: "'Epilogue', monospace",
-                      fontWeight: 900,
-                      fontSize: "clamp(0.9rem, 2vw, 1.125rem)",
-                      color: formulaColor,
-                      letterSpacing: "-0.01em",
-                      lineHeight: 1.35,
-                      wordBreak: "break-word",
-                    }}>
+                    <span
+                      style={{
+                        fontFamily: "'Epilogue', monospace",
+                        fontWeight: 900,
+                        fontSize: "clamp(0.9rem, 2vw, 1.125rem)",
+                        color: theme.text,
+                        letterSpacing: "-0.01em",
+                        lineHeight: 1.35,
+                        wordBreak: "break-word",
+                      }}
+                    >
                       {group.formula}
                     </span>
                   </div>
@@ -338,7 +498,7 @@ function FormulaSection({ tense }: TenseProp) {
   );
 }
 
-// ─── Examples ─────────────────────────────────────────────────────────────────
+// ─── Examples Inner Component ─────────────────────────────────────────────────
 
 const EXAMPLE_CATS = [
   { title: "Positive", key: "positive" },
@@ -347,41 +507,45 @@ const EXAMPLE_CATS = [
   { title: "Negative Interrogative", key: "negativeInterrogative" },
 ] as const;
 
-function ExamplesSection({ tense }: TenseProp) {
+function ExamplesInnerSection({ tense, theme, sectionLabelColor }: { tense: Tense; theme: typeof CATEGORY_THEME["present"]; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} className="formula-card formula-card-pink">
-      <SectionLabel style={{ color: "rgba(0, 0, 0, 0.6)" }}>Sentence Examples</SectionLabel>
+    <section ref={ref}>
+      <SectionLabel style={{ color: sectionLabelColor }}>Sentence Examples</SectionLabel>
 
       {/* Contextual examples */}
       {tense.examples && tense.examples.length > 0 && (
-        <div style={{ marginBottom: "2.5rem" }}>
-          <p style={{
-            fontFamily: "'Epilogue', sans-serif",
-            fontWeight: 800,
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            color: "rgba(0, 0, 0, 0.45)",
-            marginBottom: "0.75rem",
-          }}>
+        <div style={{ marginBottom: "2rem" }}>
+          <p
+            style={{
+              fontFamily: "'Epilogue', sans-serif",
+              fontWeight: 800,
+              fontSize: "0.75rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: theme.isDarkTheme ? "rgba(255, 255, 255, 0.65)" : "rgba(0, 0, 0, 0.55)",
+              marginBottom: "0.75rem",
+            }}
+          >
             Contextual
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             {tense.examples.map((s, i) => (
-              <div key={i} style={{
-                background: "rgba(255, 255, 255, 0.7)",
-                borderRadius: "14px",
-                padding: "1rem 1.375rem",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.02)",
-                border: "1px solid rgba(0,0,0,0.04)",
-                fontFamily: "'Lora', serif",
-                fontStyle: "italic",
-                fontSize: "1.0625rem",
-                color: "var(--color-dark)",
-                lineHeight: 1.6,
-              }}>
+              <div
+                key={i}
+                style={{
+                  background: theme.subBg,
+                  borderRadius: "14px",
+                  padding: "1rem 1.375rem",
+                  border: `1px solid ${theme.border}`,
+                  fontFamily: "'Lora', serif",
+                  fontStyle: "italic",
+                  fontSize: "1.0625rem",
+                  color: theme.text,
+                  lineHeight: 1.6,
+                }}
+              >
                 "{s}"
               </div>
             ))}
@@ -390,38 +554,44 @@ function ExamplesSection({ tense }: TenseProp) {
       )}
 
       {/* Sentence form grids */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: "1.5rem",
-      }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "1.25rem",
+        }}
+      >
         {EXAMPLE_CATS.map(({ title, key }) => (
           <div key={key}>
-            <p style={{
-              fontFamily: "'Epilogue', sans-serif",
-              fontWeight: 800,
-              fontSize: "0.75rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "rgba(0, 0, 0, 0.45)",
-              marginBottom: "0.625rem",
-            }}>
+            <p
+              style={{
+                fontFamily: "'Epilogue', sans-serif",
+                fontWeight: 800,
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: theme.isDarkTheme ? "rgba(255, 255, 255, 0.65)" : "rgba(0, 0, 0, 0.55)",
+                marginBottom: "0.625rem",
+              }}
+            >
               {title}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {(tense[key] as string[]).slice(0, 3).map((s, i) => (
-                <div key={i} style={{
-                  background: "rgba(255, 255, 255, 0.7)",
-                  borderRadius: "12px",
-                  padding: "0.875rem 1.125rem",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-                  border: "1px solid rgba(0,0,0,0.04)",
-                  fontFamily: "'Lora', serif",
-                  fontStyle: "italic",
-                  fontSize: "0.9375rem",
-                  color: "var(--color-dark)",
-                  lineHeight: 1.55,
-                }}>
+                <div
+                  key={i}
+                  style={{
+                    background: theme.subBg,
+                    borderRadius: "12px",
+                    padding: "0.875rem 1.125rem",
+                    border: `1px solid ${theme.border}`,
+                    fontFamily: "'Lora', serif",
+                    fontStyle: "italic",
+                    fontSize: "0.9375rem",
+                    color: theme.text,
+                    lineHeight: 1.55,
+                  }}
+                >
                   "{s}"
                 </div>
               ))}
@@ -433,30 +603,22 @@ function ExamplesSection({ tense }: TenseProp) {
   );
 }
 
-// ─── Time Expressions ─────────────────────────────────────────────────────────
+// ─── Time Expressions Inner Component ────────────────────────────────────────
 
-const PILL_COLORS = [
-  { bg: "#f0befa", color: "#6b1a3a" },
-  { bg: "#e6fab9", color: "#1e5c3f" },
-  { bg: "#82a0ff", color: "#ffffff" },
-  { bg: "#f5693c", color: "#ffffff" },
-  { bg: "#a0325a", color: "#ffffff" },
-  { bg: "#4b69f0", color: "#ffffff" },
-];
-
-function TimeExpressionsSection({ tense }: TenseProp) {
+function TimeExpressionsInnerSection({ tense, theme, sectionLabelColor }: { tense: Tense; theme: typeof CATEGORY_THEME["present"]; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} className="formula-card formula-card-green" style={{ textAlign: "center" }}>
-      <SectionLabel style={{ color: "rgba(255, 255, 255, 0.75)" }}>Common Time Expressions</SectionLabel>
+    <section ref={ref} style={{ textAlign: "center" }}>
+      <SectionLabel style={{ color: sectionLabelColor }}>Common Time Expressions</SectionLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.625rem", justifyContent: "center" }}>
-        {tense.timeExpressions.map((e) => {
-          return (
-            <span key={e} style={{
+        {tense.timeExpressions.map((e) => (
+          <span
+            key={e}
+            style={{
               display: "inline-block",
-              background: "rgba(255, 255, 255, 0.15)",
-              color: "#ffffff",
+              background: theme.subBg,
+              color: theme.text,
               padding: "0.5rem 1.125rem",
               borderRadius: "999px",
               fontFamily: "'Epilogue', sans-serif",
@@ -464,60 +626,67 @@ function TimeExpressionsSection({ tense }: TenseProp) {
               fontSize: "0.75rem",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            }}>
-              {e}
-            </span>
-          );
-        })}
+              border: `1px solid ${theme.border}`,
+            }}
+          >
+            {e}
+          </span>
+        ))}
       </div>
     </section>
   );
 }
 
-// ─── Usage ────────────────────────────────────────────────────────────────────
+// ─── Usage Inner Component ────────────────────────────────────────────────────
 
-function UsageSection({ tense }: TenseProp) {
+function UsageInnerSection({ tense, theme, sectionLabelColor }: { tense: Tense; theme: typeof CATEGORY_THEME["present"]; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} className="formula-card formula-card-darkblue">
-      <SectionLabel style={{ color: "rgba(255, 255, 255, 0.75)" }}>When to Use</SectionLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 680 }}>
+    <section ref={ref}>
+      <SectionLabel style={{ color: sectionLabelColor }}>When to Use</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 680, margin: "0 auto" }}>
         {tense.usage.map((u, i) => (
-          <div key={i} style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "1rem",
-            background: "rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "1.125rem 1.375rem",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-          }}>
-            <span style={{
-              flexShrink: 0,
-              width: 28,
-              height: 28,
-              borderRadius: "50%",
-              background: "rgba(255, 255, 255, 0.15)",
-              color: "#ffffff",
+          <div
+            key={i}
+            style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "'Epilogue', sans-serif",
-              fontWeight: 900,
-              fontSize: "0.8125rem",
-            }}>
+              alignItems: "flex-start",
+              gap: "1rem",
+              background: theme.subBg,
+              borderRadius: "14px",
+              padding: "1.125rem 1.375rem",
+              border: `1px solid ${theme.border}`,
+            }}
+          >
+            <span
+              style={{
+                flexShrink: 0,
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: theme.isDarkTheme ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)",
+                color: theme.text,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'Epilogue', sans-serif",
+                fontWeight: 900,
+                fontSize: "0.8125rem",
+              }}
+            >
               {i + 1}
             </span>
-            <p style={{
-              fontFamily: "'Lora', serif",
-              fontSize: "1rem",
-              lineHeight: 1.65,
-              color: "#ffffff",
-              margin: 0,
-              paddingTop: "0.125rem",
-            }}>
+            <p
+              style={{
+                fontFamily: "'Lora', serif",
+                fontSize: "1rem",
+                lineHeight: 1.65,
+                color: theme.text,
+                margin: 0,
+                paddingTop: "0.125rem",
+              }}
+            >
               {u}
             </p>
           </div>
@@ -527,98 +696,109 @@ function UsageSection({ tense }: TenseProp) {
   );
 }
 
-// ─── Exercise ─────────────────────────────────────────────────────────────────
+// ─── Exercise Inner Component ─────────────────────────────────────────────────
 
-interface ExerciseSectionProps extends TenseProp { questions: any[] }
-
-function ExerciseSection({ questions }: ExerciseSectionProps) {
+function ExerciseInnerSection({ questions, sectionLabelColor }: { tense: Tense; questions: any[]; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} style={{ padding: "64px 0" }}>
-      <SectionLabel>Practice Exercise</SectionLabel>
-      <h2 style={{
-        fontFamily: "'Epilogue', sans-serif",
-        fontWeight: 900,
-        fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-        letterSpacing: "-0.03em",
-        color: "#111111",
-        marginBottom: "0.5rem",
-      }}>
-        Test Your Knowledge
-      </h2>
-      <p style={{
-        fontFamily: "'Epilogue', sans-serif",
-        fontSize: "0.9375rem",
-        color: "#9c9290",
-        fontWeight: 600,
-        marginBottom: "2rem",
-      }}>
-        Cek pemahaman cepat. Lima soal acak setiap kali.
-      </p>
+    <section ref={ref}>
+      <SectionLabel style={{ color: sectionLabelColor }}>Practice Exercise</SectionLabel>
+      <div
+        style={{
+          background: "#ffffff",
+          color: "#111111",
+          borderRadius: "24px",
+          padding: "clamp(1.5rem, 4vw, 2.5rem)",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: "'Epilogue', sans-serif",
+            fontWeight: 900,
+            fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)",
+            letterSpacing: "-0.03em",
+            color: "#111111",
+            marginBottom: "0.5rem",
+          }}
+        >
+          Test Your Knowledge
+        </h2>
+        <p
+          style={{
+            fontFamily: "'Epilogue', sans-serif",
+            fontSize: "0.9375rem",
+            color: "#6b6560",
+            fontWeight: 600,
+            marginBottom: "2rem",
+          }}
+        >
+          Cek pemahaman cepat. Lima soal acak setiap kali.
+        </p>
 
-      <div style={{
-        background: "#ffffff",
-        borderRadius: "20px",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-        border: "1px solid rgba(0,0,0,0.06)",
-        overflow: "hidden",
-      }}>
         <ExerciseBlock questions={questions} />
       </div>
     </section>
   );
 }
 
-// ─── Quiz CTA ─────────────────────────────────────────────────────────────────
+// ─── Quiz CTA Inner Component ─────────────────────────────────────────────────
 
-function QuizCtaSection({ tense }: TenseProp) {
+function QuizCtaInnerSection({ tense, sectionLabelColor }: { tense: Tense; sectionLabelColor: string }) {
   const ref = useScrollReveal<HTMLElement>();
 
   return (
-    <section ref={ref} style={{ padding: "64px 0 0" }}>
-      <div style={{
-        background: "#ffffff",
-        borderRadius: "20px",
-        padding: "clamp(2.5rem, 6vw, 4rem)",
-        textAlign: "center",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-        border: "1px solid rgba(0,0,0,0.06)",
-      }}>
-        <span style={{
-          display: "block",
-          fontFamily: "'Epilogue', sans-serif",
-          fontWeight: 900,
-          fontSize: "0.6875rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.15em",
-          color: "#d00973ff",
-          marginBottom: "1rem",
-        }}>
+    <section ref={ref} style={{ textAlign: "center" }}>
+      <div
+        style={{
+          background: "#ffffff",
+          color: "#111111",
+          borderRadius: "24px",
+          padding: "clamp(2.5rem, 6vw, 3.5rem)",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontFamily: "'Epilogue', sans-serif",
+            fontWeight: 900,
+            fontSize: "0.6875rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            color: "#d00973ff",
+            marginBottom: "1rem",
+          }}
+        >
           Ready to test?
         </span>
 
-        <h2 style={{
-          fontFamily: "'Epilogue', sans-serif",
-          fontWeight: 900,
-          fontSize: "clamp(2rem, 5vw, 3.25rem)",
-          letterSpacing: "-0.03em",
-          color: "#111111",
-          lineHeight: 1.1,
-          marginBottom: "1rem",
-        }}>
+        <h2
+          style={{
+            fontFamily: "'Epilogue', sans-serif",
+            fontWeight: 900,
+            fontSize: "clamp(2rem, 4.5vw, 3rem)",
+            letterSpacing: "-0.03em",
+            color: "#111111",
+            lineHeight: 1.1,
+            marginBottom: "1rem",
+          }}
+        >
           Take the Tense Quiz!
         </h2>
 
-        <p style={{
-          fontFamily: "'Epilogue', sans-serif",
-          fontSize: "1rem",
-          color: "#6b6560",
-          fontWeight: 500,
-          maxWidth: 440,
-          margin: "0 auto 2rem",
-          lineHeight: 1.65,
-        }}>
+        <p
+          style={{
+            fontFamily: "'Epilogue', sans-serif",
+            fontSize: "1rem",
+            color: "#6b6560",
+            fontWeight: 500,
+            maxWidth: 440,
+            margin: "0 auto 2rem",
+            lineHeight: 1.65,
+          }}
+        >
           Siap diuji? Kerjakan 20 soal khusus tense ini untuk mengunci pencapaian dan menguji pemahamanmu.
         </p>
 
